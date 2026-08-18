@@ -217,8 +217,9 @@
     background: var(--surface); border:1px solid var(--border); border-radius: var(--radius-lg);
     padding: 18px 18px 14px; box-shadow: var(--shadow);
   }
-  .grid-2{ display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 880px){ .grid-2{ grid-template-columns: 1fr; } }
+  /* Stacked, never side-by-side — long institution/specialty names need the full
+     card width to stay legible, so these panels always run one below the other. */
+  .grid-2{ display:grid; grid-template-columns: 1fr; gap: 16px; }
 
   /* legend */
   .legend{ display:flex; flex-wrap:wrap; gap:14px; font-size:12.5px; color:var(--ink-2); margin-bottom:10px; }
@@ -232,6 +233,23 @@
     font-size:12.5px; color: var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     cursor:default;
   }
+  /* Names too long for their column auto-scroll ("marquee") instead of just clipping,
+     so the full institution/program name stays readable on narrow screens. */
+  .rank-row .rname.marquee{ text-overflow: clip; }
+  .rank-row .rname .marquee-text{ display:inline-block; white-space:nowrap; }
+  .rank-row .rname.marquee .marquee-text{
+    animation-name: marquee-scroll; animation-timing-function: ease-in-out; animation-iteration-count: infinite;
+  }
+  .rank-row .rname:hover .marquee-text, .rank-row .rname:focus-within .marquee-text{ animation-play-state: paused; }
+  @keyframes marquee-scroll{
+    0%, 8%    { transform: translateX(0); }
+    42%, 50%  { transform: translateX(calc(-1 * var(--marquee-dist, 0px))); }
+    92%, 100% { transform: translateX(0); }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .rank-row .rname.marquee .marquee-text{ animation: none; }
+    .rank-row .rname.marquee{ text-overflow: ellipsis; }
+  }
   .rank-track{
     position:relative; height:20px; background: var(--surface-2); border-radius: 4px; overflow:hidden;
   }
@@ -243,6 +261,9 @@
   .rank-track:hover .rank-fill, .rank-row:focus-within .rank-fill{ filter: brightness(1.08); }
   .rank-row .rval{ font-family:"IBM Plex Mono",monospace; font-size:12.5px; text-align:right; font-variant-numeric: tabular-nums; color:var(--ink); }
   .rank-track:focus-visible{ outline: 2px solid var(--s1-blue); outline-offset:1px; }
+  @media (max-width: 640px){
+    .rank-row{ grid-template-columns: 112px 1fr 46px; gap:7px; }
+  }
 
   /* ---------- Pipeline (grouped columns) chart ---------- */
   .pipeline-wrap{ display:flex; gap:10px; }
@@ -261,18 +282,24 @@
     position:absolute; bottom:-24px; left:0; right:0; text-align:center;
     font-family:"IBM Plex Mono",monospace; font-size:12px; color: var(--ink-2); font-weight:600;
   }
+  /* Five groups of four columns need to shrink to fit narrow screens without
+     spilling past the card edge. */
+  @media (max-width: 640px){
+    .pipeline-axis{ width:34px; font-size:10px; }
+    .pcol{ width:9px; }
+    .pgroup{ gap:2px; }
+    .pgroup .glabel{ font-size:10.5px; }
+  }
+  @media (max-width: 420px){
+    .pipeline-axis{ width:28px; }
+    .pcol{ width:7px; }
+  }
 
-  /* ---------- Diverging chart ---------- */
-  .div-list{ display:flex; flex-direction:column; gap:8px; }
-  .div-row{ display:grid; grid-template-columns: 1fr 46px; align-items:center; gap:8px; }
-  .div-track{ position:relative; height:20px; background: linear-gradient(to right, transparent 49.85%, var(--border) 49.85%, var(--border) 50.15%, transparent 50.15%); }
-  .div-fill{ position:absolute; top:0; height:100%; border-radius:4px; min-width:2px; }
-  .div-fill.pos{ background: var(--div-pos); left:50%; }
-  .div-fill.neg{ background: var(--div-neg); right:50%; }
-  .div-name{ font-size:12px; color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .div-val{ font-family:"IBM Plex Mono",monospace; font-size:12.5px; text-align:right; font-variant-numeric:tabular-nums; }
-  .div-val.pos{ color: var(--success-text); }
-  .div-val.neg{ color: var(--critical); }
+  /* ---------- Signed lists (maiores variações) — reuses .rank-row, colored by sign ---------- */
+  .subhead{ font-size:11.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); font-weight:700; margin:18px 0 8px; }
+  .subhead:first-child{ margin-top:0; }
+  .subhead.pos{ color: var(--div-pos); }
+  .subhead.neg{ color: var(--div-neg); }
 
   /* ---------- Duration mini chart ---------- */
   .dur-row{ display:grid; grid-template-columns: 70px 1fr 40px; align-items:center; gap:10px; margin-bottom:8px; }
@@ -338,6 +365,31 @@
   td.delta.flat{ color: var(--ink-muted); }
   .esp-name{ color: var(--ink); }
   .inst-name{ color: var(--ink-2); font-size:12px; }
+
+  /* Below ~680px a 7-column table stops being readable even with horizontal
+     scroll, so it becomes a stack of cards — one per program, full names
+     wrap instead of truncating, each value labeled inline. */
+  @media (max-width: 680px){
+    .table-scroll{ overflow-x: visible; }
+    table.data{ min-width: 0; }
+    table.data thead{ display:none; }
+    table.data, table.data tbody, table.data tr{ display:block; width:100%; }
+    table.data tbody tr{
+      border:1px solid var(--border); border-radius: var(--radius-md);
+      margin-bottom:10px; padding:10px 12px; background:var(--surface);
+    }
+    table.data tbody tr:hover{ background: var(--surface); }
+    table.data td{
+      display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+      padding:5px 0; border-bottom:none;
+    }
+    table.data td + td{ border-top:1px solid var(--border); }
+    table.data td:first-child{ display:block; padding-bottom:8px; margin-bottom:4px; }
+    table.data td[data-label]::before{
+      content: attr(data-label); color:var(--ink-muted); font-weight:600;
+      font-size:11px; text-transform:uppercase; letter-spacing:.03em; flex:none;
+    }
+  }
   .pager{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; flex-wrap:wrap; }
   .pager .pinfo{ font-size:12px; color:var(--ink-muted); font-family:"IBM Plex Mono",monospace; }
   .pager .pbtns{ display:flex; gap:6px; }
@@ -433,11 +485,10 @@
         <span class="sec-sub">Projetadas 2027 vs. ocupadas 2026</span>
       </div>
       <div class="card">
-        <div class="legend">
-          <span class="li"><span class="sw" style="background:var(--div-pos)"></span>Aumento</span>
-          <span class="li"><span class="sw" style="background:var(--div-neg)"></span>Redução</span>
-        </div>
-        <div class="div-list" id="divergingList"></div>
+        <div class="subhead pos">▲ Maiores aumentos</div>
+        <div class="rank-list" id="gainersList"></div>
+        <div class="subhead neg">▼ Maiores reduções</div>
+        <div class="rank-list" id="losersList"></div>
       </div>
     </section>
 
@@ -648,6 +699,24 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
       .sort((a,b)=>b.proj-a.proj);
   }
 
+  const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // If a name is too long for its column, turn it into a slow auto-scrolling
+  // marquee instead of leaving it clipped — the full institution/program name
+  // stays reachable without hovering (important on touch devices with no hover).
+  function applyMarquee(nameEl, fullText){
+    if (prefersReducedMotion) return;
+    if (nameEl.scrollWidth <= nameEl.clientWidth + 1) return; // fits already
+    const distance = (nameEl.scrollWidth - nameEl.clientWidth) + 20;
+    nameEl.textContent = '';
+    nameEl.classList.add('marquee');
+    const span = document.createElement('span');
+    span.className = 'marquee-text';
+    span.textContent = fullText;
+    span.style.setProperty('--marquee-dist', distance + 'px');
+    span.style.animationDuration = Math.max(5, distance / 26).toFixed(1) + 's';
+    nameEl.appendChild(span);
+  }
+
   function renderRankChart(containerId, items, limit){
     const el = document.getElementById(containerId);
     el.textContent = '';
@@ -684,6 +753,7 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
 
       row.appendChild(name); row.appendChild(track); row.appendChild(val);
       el.appendChild(row);
+      applyMarquee(name, item.name);
     });
   }
 
@@ -763,44 +833,32 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
     });
   }
 
-  // ---------------- Diverging chart ----------------
-  function renderDiverging(rows){
-    const items = rows.map(r => ({
-      name: `${DATA.espNames[r[1]]} — ${DATA.instNames[r[0]]}`,
-      ocup: stageTotal(r,'ocup'),
-      proj: stageTotal(r,'proj'),
-      delta: stageTotal(r,'proj') - stageTotal(r,'ocup'),
-    })).filter(i => i.delta !== 0);
-    items.sort((a,b) => a.delta - b.delta);
-    const losers = items.filter(i=>i.delta<0).slice(0,6);
-    const gainers = items.filter(i=>i.delta>0).sort((a,b)=>b.delta-a.delta).slice(0,6);
-    const shown = [...gainers, ...losers.reverse()].sort((a,b)=>b.delta-a.delta);
-
-    const el = document.getElementById('divergingList');
+  // ---------------- Signed lists (maiores variações) ----------------
+  // Reuses the proven .rank-row/.rank-track pattern (bar grows from zero, name
+  // in its own grid column) instead of a center-pivot overlay — no absolute-
+  // positioned label can ever collide with the bar or the value this way.
+  function renderSignedList(containerId, items, colorVar){
+    const el = document.getElementById(containerId);
     el.textContent = '';
-    if (!shown.length){ el.innerHTML = '<div class="empty-note">Nenhuma variação nos filtros atuais.</div>'; return; }
-    const maxAbs = Math.max(...shown.map(i=>Math.abs(i.delta)), 1);
-    shown.forEach(item => {
-      const row = document.createElement('div'); row.className='div-row';
-      const track = document.createElement('div'); track.className='div-track'; track.tabIndex=0;
-      const fill = document.createElement('div');
-      fill.className = 'div-fill ' + (item.delta>0?'pos':'neg');
-      const pct = Math.min(Math.abs(item.delta)/maxAbs*49, 49);
-      fill.style.width = pct + '%';
+    if (!items.length){ el.innerHTML = '<div class="empty-note">Nenhuma variação nos filtros atuais.</div>'; return; }
+    const max = Math.max(...items.map(i => Math.abs(i.delta)), 1);
+    items.forEach(item => {
+      const row = document.createElement('div'); row.className='rank-row';
+      const name = document.createElement('div'); name.className='rname'; name.textContent = item.name; name.title = item.name;
+      const track = document.createElement('div'); track.className='rank-track'; track.tabIndex = 0;
+      track.setAttribute('role','img');
+      track.setAttribute('aria-label', `${item.name}: ${fmtSigned(item.delta)}`);
+      const fill = document.createElement('div'); fill.className='rank-fill';
+      fill.style.background = colorVar;
+      fill.style.width = Math.max(Math.abs(item.delta)/max*100, 1.5) + '%';
       track.appendChild(fill);
-      const nameLbl = document.createElement('div');
-      nameLbl.style.cssText='position:absolute;top:0;bottom:0;display:flex;align-items:center;font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:78%;';
-      if (item.delta>0){ nameLbl.style.left='calc(50% + 8px)'; } else { nameLbl.style.right='calc(50% + 8px)'; nameLbl.style.textAlign='right'; }
-      nameLbl.textContent = item.name;
-      track.appendChild(nameLbl);
-
-      const val = document.createElement('div'); val.className = 'div-val ' + (item.delta>0?'pos':'neg');
+      const val = document.createElement('div'); val.className='rval'; val.style.color = colorVar;
       val.textContent = fmtSigned(item.delta);
 
       const mv = (evt) => showTooltip(evt, item.name, [
         {label:'Ocupadas 2026', value: fmt(item.ocup)},
         {label:'Projetadas 2027', value: fmt(item.proj)},
-        {label:'Variação', value: fmtSigned(item.delta), color: item.delta>0?'var(--div-pos)':'var(--div-neg)'},
+        {label:'Variação', value: fmtSigned(item.delta), color: colorVar},
       ]);
       track.addEventListener('pointermove', mv);
       track.addEventListener('pointerenter', mv);
@@ -808,9 +866,23 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
       track.addEventListener('pointerleave', hideTooltip);
       track.addEventListener('blur', hideTooltip);
 
-      row.appendChild(track); row.appendChild(val);
+      row.appendChild(name); row.appendChild(track); row.appendChild(val);
       el.appendChild(row);
+      applyMarquee(name, item.name);
     });
+  }
+
+  function renderDiverging(rows){
+    const items = rows.map(r => ({
+      name: `${DATA.espNames[r[1]]} — ${DATA.instNames[r[0]]}`,
+      ocup: stageTotal(r,'ocup'),
+      proj: stageTotal(r,'proj'),
+      delta: stageTotal(r,'proj') - stageTotal(r,'ocup'),
+    })).filter(i => i.delta !== 0);
+    const gainers = items.filter(i=>i.delta>0).sort((a,b)=>b.delta-a.delta).slice(0,6);
+    const losers = items.filter(i=>i.delta<0).sort((a,b)=>a.delta-b.delta).slice(0,6);
+    renderSignedList('gainersList', gainers, 'var(--div-pos)');
+    renderSignedList('losersList', losers, 'var(--div-neg)');
   }
 
   // ---------------- Duration chart ----------------
@@ -955,13 +1027,14 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
       const instDiv = document.createElement('div'); instDiv.className='inst-name'; instDiv.textContent = it.inst;
       tdName.appendChild(espDiv); tdName.appendChild(instDiv);
 
-      const tdDur = document.createElement('td'); tdDur.className='num'; tdDur.textContent = it.dur ? (it.dur+(it.dur===1?' ano':' anos')) : '—';
-      const tdCred = document.createElement('td'); tdCred.className='num'; tdCred.textContent = fmt(it.cred);
-      const tdOfer = document.createElement('td'); tdOfer.className='num'; tdOfer.textContent = fmt(it.ofer);
-      const tdOcup = document.createElement('td'); tdOcup.className='num'; tdOcup.textContent = fmt(it.ocup);
-      const tdProj = document.createElement('td'); tdProj.className='num'; tdProj.textContent = fmt(it.proj);
+      const tdDur = document.createElement('td'); tdDur.className='num'; tdDur.dataset.label='Duração'; tdDur.textContent = it.dur ? (it.dur+(it.dur===1?' ano':' anos')) : '—';
+      const tdCred = document.createElement('td'); tdCred.className='num'; tdCred.dataset.label='Credenciadas'; tdCred.textContent = fmt(it.cred);
+      const tdOfer = document.createElement('td'); tdOfer.className='num'; tdOfer.dataset.label='Ofertadas'; tdOfer.textContent = fmt(it.ofer);
+      const tdOcup = document.createElement('td'); tdOcup.className='num'; tdOcup.dataset.label='Ocupadas 2026'; tdOcup.textContent = fmt(it.ocup);
+      const tdProj = document.createElement('td'); tdProj.className='num'; tdProj.dataset.label='Projetadas 2027'; tdProj.textContent = fmt(it.proj);
       const tdDelta = document.createElement('td');
       tdDelta.className = 'num delta ' + (it.delta>0?'up':it.delta<0?'down':'flat');
+      tdDelta.dataset.label='Variação';
       tdDelta.textContent = (it.delta>0?'▲ ':it.delta<0?'▼ ':'– ') + fmtSigned(it.delta);
 
       [tdName, tdDur, tdCred, tdOfer, tdOcup, tdProj, tdDelta].forEach(td => tr.appendChild(td));

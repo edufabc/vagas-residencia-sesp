@@ -206,6 +206,11 @@
   .kpi .k-delta.up{ color: var(--success-text); }
   .kpi .k-delta.down{ color: var(--critical); }
   .kpi .k-delta.flat{ color: var(--ink-muted); }
+  /* A ratio (e.g. occupancy rate) — no arrow, since it isn't a change over time. */
+  .kpi .k-ratio{ font-size:12px; font-weight:600; }
+  .kpi .k-ratio.good{ color: var(--success-text); }
+  .kpi .k-ratio.mid{ color: var(--ink-2); }
+  .kpi .k-ratio.bad{ color: var(--critical); }
   .kpi .k-note{ font-size:11.5px; color:var(--ink-muted); }
 
   /* ---------- Section shell ---------- */
@@ -640,11 +645,16 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
     const deltaOcup = proj-ocup;
     const deltaOcupPct = ocup>0 ? (deltaOcup/ocup*100) : 0;
 
+    // "Ocupadas" is a fill rate (ocupadas ÷ ofertadas), not a change over time —
+    // it gets its own wording and no arrow, so it can't be misread as a negative
+    // delta next to the tile beside it that genuinely is one (projetadas vs. 2026).
+    const occLevel = occRate>=95 ? 'good' : (occRate>=85 ? 'mid' : 'bad');
+
     const tiles = [
       { label:'Instituições', value: fmt(instSet.size), note: `${fmt(espSet.size)} especialidades` },
       { label:'Vagas credenciadas', value: fmt(cred), note: `${fmt(cred-ofer)} além do ofertado` },
       { label:'Vagas ofertadas', value: fmt(ofer), note: 'base do ciclo' },
-      { label:'Ocupadas em 2026', value: fmt(ocup), delta: occRate, deltaLabel: `${occRate.toFixed(1)}% da oferta`, dir: occRate>=95?'up':(occRate>=85?'flat':'down') },
+      { label:'Ocupadas em 2026', value: fmt(ocup), ratioLabel: `${occRate.toFixed(1)}% da oferta preenchida`, ratioLevel: occLevel },
       { label:'Projetadas para 2027', value: fmt(proj), delta: deltaOcup, deltaLabel: `${fmtSigned(deltaOcup)} vs. 2026 (${deltaOcupPct>=0?'+':''}${deltaOcupPct.toFixed(1)}%)`, dir: deltaOcup>0?'up':(deltaOcup<0?'down':'flat') },
       { label:'Programas listados', value: fmt(rows.length), note: `de ${fmt(DATA.rows.length)} no total` },
     ];
@@ -656,7 +666,10 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
       const lab = document.createElement('div'); lab.className='k-label'; lab.textContent = t.label;
       const val = document.createElement('div'); val.className='k-value'; val.textContent = t.value;
       card.appendChild(lab); card.appendChild(val);
-      if (t.deltaLabel){
+      if (t.ratioLabel){
+        const r = document.createElement('div'); r.className = 'k-ratio ' + t.ratioLevel; r.textContent = t.ratioLabel;
+        card.appendChild(r);
+      } else if (t.deltaLabel){
         const d = document.createElement('div'); d.className = 'k-delta ' + t.dir;
         d.textContent = (t.dir==='up'?'▲ ':t.dir==='down'?'▼ ':'– ') + t.deltaLabel;
         card.appendChild(d);

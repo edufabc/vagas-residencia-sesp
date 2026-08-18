@@ -362,6 +362,10 @@
   td.delta.up{ color: var(--success-text); font-weight:600; }
   td.delta.down{ color: var(--critical); font-weight:600; }
   td.delta.flat{ color: var(--ink-muted); }
+  .inline-delta{ font-size:11px; font-weight:700; font-family:"IBM Plex Mono",monospace; }
+  .inline-delta.up{ color: var(--success-text); }
+  .inline-delta.down{ color: var(--critical); }
+  .inline-delta.flat{ color: var(--ink-muted); }
   .esp-name{ color: var(--ink); }
   .inst-name{ color: var(--ink-2); font-size:12px; }
 
@@ -860,7 +864,13 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
         tdRate.style.fontWeight = '600';
         tdRate.style.color = e.rate>=95 ? 'var(--success-text)' : (e.rate>=80 ? 'var(--ink-2)' : 'var(--critical)');
       }
-      const tdProj = document.createElement('td'); tdProj.className='num'; tdProj.dataset.label='Projetadas 2027'; tdProj.textContent = fmt(e.proj);
+      const tdProj = document.createElement('td'); tdProj.className='num'; tdProj.dataset.label='Projetadas 2027';
+      tdProj.appendChild(document.createTextNode(fmt(e.proj) + ' '));
+      const projDelta = e.proj - e.ocup;
+      const deltaSpan = document.createElement('span');
+      deltaSpan.className = 'inline-delta ' + (projDelta>0 ? 'up' : projDelta<0 ? 'down' : 'flat');
+      deltaSpan.textContent = (projDelta>0 ? '▲' : projDelta<0 ? '▼' : '=') + ' ' + fmtSigned(projDelta);
+      tdProj.appendChild(deltaSpan);
       [tdName, tdInst, tdCred, tdOfer, tdOcup, tdRate, tdProj].forEach(td => tr.appendChild(td));
       tbody.appendChild(tr);
     });

@@ -755,12 +755,19 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
   function renderSpecHighlights(stats){
     const el = document.getElementById('specHighlights');
     el.textContent = '';
-    const MIN_OFER = 8; // ignore tiny specialties so the headline isn't noise (e.g. 1 vaga = 0% or 100%)
-    const eligible = stats.filter(e => e.ofer >= MIN_OFER);
-    if (!eligible.length){
-      el.innerHTML = '<div class="empty-note">Nenhuma especialidade com volume suficiente (≥ 8 vagas ofertadas) nos filtros atuais.</div>';
+    const rated = stats.filter(e => e.ofer > 0); // has a real ocup/ofer rate
+    if (!rated.length){
+      el.innerHTML = '<div class="empty-note">Nenhuma especialidade com vagas ofertadas nos filtros atuais.</div>';
       return;
     }
+    // Prefer specialties with real volume (≥ 8 ofertadas) so the headline isn't
+    // noise from a single vaga (1/1 = 100%) — but that threshold must never hide
+    // the exact comparison a narrow filter/search is trying to show, so fall
+    // back to the full rated list whenever it would leave fewer than 2 to compare.
+    const MIN_OFER = 8;
+    const withVolume = rated.filter(e => e.ofer >= MIN_OFER);
+    const pool = withVolume.length >= 2 ? withVolume : rated;
+
     function card(badgeClass, badgeText, title, big, desc){
       const c = document.createElement('div'); c.className='card hl-card';
       const top = document.createElement('div'); top.className='hl-top';
@@ -775,8 +782,16 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
       c.appendChild(d);
       el.appendChild(c);
     }
-    const mostSought = [...eligible].sort((a,b)=>b.rate-a.rate)[0];
-    const mostIdle = [...eligible].sort((a,b)=>a.rate-b.rate)[0];
+
+    const mostSought = [...pool].sort((a,b)=>b.rate-a.rate)[0];
+    const mostIdle = [...pool].sort((a,b)=>a.rate-b.rate)[0];
+
+    if (mostSought.name === mostIdle.name){
+      // only one distinct specialty in view — one card, not two identical ones
+      card('neutral', 'Única no filtro', mostSought.name, mostSought.rate.toFixed(1)+'%',
+        `${fmt(mostSought.ocup)} ocupadas de ${fmt(mostSought.ofer)} ofertadas, em ${fmt(mostSought.n_inst)} instituiç${mostSought.n_inst===1?'ão':'ões'}. Amplie o filtro para comparar com outras.`);
+      return;
+    }
     card('good', 'Mais concorrida', mostSought.name, mostSought.rate.toFixed(1)+'%',
       `${fmt(mostSought.ocup)} ocupadas de ${fmt(mostSought.ofer)} ofertadas, em ${fmt(mostSought.n_inst)} instituiç${mostSought.n_inst===1?'ão':'ões'}.`);
     card('critical', 'Mais ociosa', mostIdle.name, mostIdle.rate.toFixed(1)+'%',

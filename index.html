@@ -299,6 +299,8 @@
   /* ---------- Highlights ---------- */
   .hl-grid{ display:grid; grid-template-columns: repeat(3,1fr); gap:14px; }
   @media (max-width: 880px){ .hl-grid{ grid-template-columns: 1fr; } }
+  .hl-grid-2{ display:grid; grid-template-columns: repeat(2,1fr); gap:14px; }
+  @media (max-width: 640px){ .hl-grid-2{ grid-template-columns: 1fr; } }
   .hl-card{ display:flex; flex-direction:column; gap:8px; }
   .hl-top{ display:flex; align-items:center; gap:8px; }
   .badge{
@@ -451,6 +453,43 @@
 
   <section>
     <div class="sec-head">
+      <h2>Especialidades no Estado</h2>
+      <span class="sec-sub" id="specSub">Totais por especialidade, somando todas as instituições</span>
+    </div>
+    <div class="hl-grid-2" id="specHighlights"></div>
+    <div class="card" style="margin-top:14px;">
+      <div class="table-scroll">
+        <table class="data" id="specTable">
+          <thead>
+            <tr>
+              <th class="th-sort" data-key="name">Especialidade <span class="arrow">↕</span></th>
+              <th class="th-sort num" data-key="n_inst">Instituições <span class="arrow">↕</span></th>
+              <th class="th-sort num" data-key="cred">Credenciadas <span class="arrow">↕</span></th>
+              <th class="th-sort num" data-key="ofer">Ofertadas <span class="arrow">↕</span></th>
+              <th class="th-sort num" data-key="ocup">Ocupadas 2026 <span class="arrow">↕</span></th>
+              <th class="th-sort num" data-key="rate">Taxa de ocupação <span class="arrow">↕</span></th>
+              <th class="th-sort num" data-key="proj">Projetadas 2027 <span class="arrow">↕</span></th>
+            </tr>
+          </thead>
+          <tbody id="specTableBody"></tbody>
+        </table>
+      </div>
+      <div id="specTableEmpty" class="empty-note" style="display:none;">Nenhuma especialidade encontrada para os filtros atuais.</div>
+      <div class="pager">
+        <span class="pinfo" id="specPagerInfo"></span>
+        <div class="pbtns">
+          <button class="page-btn" id="specPFirst">« Primeira</button>
+          <button class="page-btn" id="specPPrev">‹ Anterior</button>
+          <button class="page-btn" id="specPNext">Próxima ›</button>
+          <button class="page-btn" id="specPLast">Última »</button>
+        </div>
+      </div>
+      <p style="font-size:11.5px;color:var(--ink-muted);margin:12px 2px 0;">A taxa de ocupação pode passar de 100%: "ocupadas" soma residentes de todos os anos (R1–R5) em formação ao mesmo tempo, enquanto "ofertadas" é a base de vagas do ciclo atual — as duas nem sempre casam perfeitamente. Toque numa coluna para ordenar.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
       <h2>Funil por ano de residência</h2>
       <span class="sec-sub">Vagas em cada estágio, de R1 a R5</span>
     </div>
@@ -504,7 +543,7 @@
     </div>
     <div class="card">
       <div class="table-scroll">
-        <table class="data">
+        <table class="data" id="mainTable">
           <thead>
             <tr>
               <th class="th-sort" data-key="esp">Especialidade / Instituição <span class="arrow">↕</span></th>
@@ -576,11 +615,11 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
   document.getElementById('metaLine').textContent =
     `${DATA.instNames.length} instituições · ${DATA.espNames.length} especialidades · ${DATA.rows.length} programas de residência cadastrados`;
 
-  fSearch.addEventListener('input', () => { state.q = fSearch.value.trim().toLowerCase(); state.page = 1; renderAll(); });
-  fInst.addEventListener('change', () => { state.inst = fInst.value; state.page = 1; renderAll(); });
-  fDur.addEventListener('change', () => { state.dur = fDur.value; state.page = 1; renderAll(); });
+  fSearch.addEventListener('input', () => { state.q = fSearch.value.trim().toLowerCase(); state.page = 1; specPage = 1; renderAll(); });
+  fInst.addEventListener('change', () => { state.inst = fInst.value; state.page = 1; specPage = 1; renderAll(); });
+  fDur.addEventListener('change', () => { state.dur = fDur.value; state.page = 1; specPage = 1; renderAll(); });
   fClear.addEventListener('click', () => {
-    state.q=''; state.inst=''; state.dur=''; state.page=1;
+    state.q=''; state.inst=''; state.dur=''; state.page=1; specPage = 1;
     fSearch.value=''; fInst.value=''; fDur.value='';
     renderAll();
   });
@@ -682,17 +721,134 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
   }
 
   // ---------------- Ranking charts ----------------
-  function aggregateBy(rows, groupIdx, names){
+  function aggregateBy(rows, groupIdx, names, otherIdx){
     const map = new Map();
     rows.forEach(r => {
       const key = r[groupIdx];
       let a = map.get(key);
-      if (!a){ a = {cred:0,ofer:0,ocup:0,proj:0}; map.set(key,a); }
+      if (!a){ a = {cred:0,ofer:0,ocup:0,proj:0,others:new Set()}; map.set(key,a); }
       a.cred += stageTotal(r,'cred'); a.ofer += stageTotal(r,'ofer');
       a.ocup += stageTotal(r,'ocup'); a.proj += stageTotal(r,'proj');
+      if (otherIdx !== undefined) a.others.add(r[otherIdx]);
     });
-    return [...map.entries()].map(([idx,a]) => ({ name: names[idx], ...a }))
-      .sort((a,b)=>b.proj-a.proj);
+    return [...map.entries()].map(([idx,a]) => ({
+      name: names[idx], cred:a.cred, ofer:a.ofer, ocup:a.ocup, proj:a.proj, count: a.others.size
+    })).sort((a,b)=>b.proj-a.proj);
+  }
+
+  // ---------------- Especialidades no Estado (aggregated by specialty) ----------------
+  function computeSpecStats(rows){
+    return aggregateBy(rows, 1, DATA.espNames, 0)
+      .map(e => ({ ...e, n_inst: e.count, rate: e.ofer > 0 ? e.ocup/e.ofer*100 : null }));
+  }
+
+  function renderSpecHighlights(stats){
+    const el = document.getElementById('specHighlights');
+    el.textContent = '';
+    const MIN_OFER = 8; // ignore tiny specialties so the headline isn't noise (e.g. 1 vaga = 0% or 100%)
+    const eligible = stats.filter(e => e.ofer >= MIN_OFER);
+    if (!eligible.length){
+      el.innerHTML = '<div class="empty-note">Nenhuma especialidade com volume suficiente (≥ 8 vagas ofertadas) nos filtros atuais.</div>';
+      return;
+    }
+    function card(badgeClass, badgeText, title, big, desc){
+      const c = document.createElement('div'); c.className='card hl-card';
+      const top = document.createElement('div'); top.className='hl-top';
+      const b = document.createElement('span'); b.className='badge '+badgeClass; b.textContent = badgeText;
+      top.appendChild(b);
+      c.appendChild(top);
+      const t = document.createElement('div'); t.style.cssText='font-weight:700;font-size:14px;margin-top:3px;'; t.textContent = title;
+      c.appendChild(t);
+      const v = document.createElement('div'); v.className='hl-value'; v.textContent = big;
+      c.appendChild(v);
+      const d = document.createElement('div'); d.className='hl-desc'; d.textContent = desc;
+      c.appendChild(d);
+      el.appendChild(c);
+    }
+    const mostSought = [...eligible].sort((a,b)=>b.rate-a.rate)[0];
+    const mostIdle = [...eligible].sort((a,b)=>a.rate-b.rate)[0];
+    card('good', 'Mais concorrida', mostSought.name, mostSought.rate.toFixed(1)+'%',
+      `${fmt(mostSought.ocup)} ocupadas de ${fmt(mostSought.ofer)} ofertadas, em ${fmt(mostSought.n_inst)} instituiç${mostSought.n_inst===1?'ão':'ões'}.`);
+    card('critical', 'Mais ociosa', mostIdle.name, mostIdle.rate.toFixed(1)+'%',
+      `${fmt(mostIdle.ocup)} ocupadas de ${fmt(mostIdle.ofer)} ofertadas, em ${fmt(mostIdle.n_inst)} instituiç${mostIdle.n_inst===1?'ão':'ões'}.`);
+  }
+
+  const specSort = { key:'ofer', dir:'desc' };
+  let specPage = 1;
+  const SPEC_PAGE_SIZE = 20;
+  const specThead = document.querySelector('#specTable thead tr');
+  function updateSpecSortIndicators(){
+    specThead.querySelectorAll('.th-sort').forEach(th => {
+      const active = th.dataset.key === specSort.key;
+      th.classList.toggle('active', active);
+      th.querySelector('.arrow').textContent = active ? (specSort.dir==='asc' ? '↑' : '↓') : '↕';
+    });
+  }
+  specThead.querySelectorAll('.th-sort').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.key;
+      if (specSort.key === key){ specSort.dir = specSort.dir==='asc' ? 'desc' : 'asc'; }
+      else { specSort.key = key; specSort.dir = (key==='name') ? 'asc' : 'desc'; }
+      specPage = 1;
+      updateSpecSortIndicators();
+      renderSpecTable(computeSpecStats(getFilteredRows()));
+    });
+  });
+
+  function renderSpecTable(stats){
+    const tbody = document.getElementById('specTableBody');
+    const emptyEl = document.getElementById('specTableEmpty');
+    tbody.textContent = '';
+    document.getElementById('specSub').textContent =
+      `${fmt(stats.length)} especialidade${stats.length===1?'':'s'} · totais somando todas as instituições nos filtros atuais`;
+
+    if (!stats.length){ emptyEl.style.display = 'block'; return; }
+    emptyEl.style.display = 'none';
+
+    const key = specSort.key, dir = specSort.dir === 'asc' ? 1 : -1;
+    const items = [...stats].sort((a,b) => {
+      if (key === 'name') return a.name.localeCompare(b.name, 'pt-BR') * dir;
+      const av = a[key], bv = b[key];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;  // specialties with 0 ofertadas (no rate) always sink to the bottom
+      if (bv == null) return -1;
+      return (av - bv) * dir;
+    });
+
+    const totalPages = Math.max(1, Math.ceil(items.length / SPEC_PAGE_SIZE));
+    if (specPage > totalPages) specPage = totalPages;
+    const startIdx = (specPage-1) * SPEC_PAGE_SIZE;
+    const pageItems = items.slice(startIdx, startIdx + SPEC_PAGE_SIZE);
+
+    pageItems.forEach(e => {
+      const tr = document.createElement('tr');
+      const tdName = document.createElement('td'); tdName.textContent = e.name;
+      const tdInst = document.createElement('td'); tdInst.className='num'; tdInst.dataset.label='Instituições'; tdInst.textContent = fmt(e.n_inst);
+      const tdCred = document.createElement('td'); tdCred.className='num'; tdCred.dataset.label='Credenciadas'; tdCred.textContent = fmt(e.cred);
+      const tdOfer = document.createElement('td'); tdOfer.className='num'; tdOfer.dataset.label='Ofertadas'; tdOfer.textContent = fmt(e.ofer);
+      const tdOcup = document.createElement('td'); tdOcup.className='num'; tdOcup.dataset.label='Ocupadas 2026'; tdOcup.textContent = fmt(e.ocup);
+      const tdRate = document.createElement('td'); tdRate.className='num'; tdRate.dataset.label='Taxa de ocupação';
+      if (e.rate == null){ tdRate.textContent = '—'; }
+      else {
+        tdRate.textContent = e.rate.toFixed(1) + '%';
+        tdRate.style.fontWeight = '600';
+        tdRate.style.color = e.rate>=95 ? 'var(--success-text)' : (e.rate>=80 ? 'var(--ink-2)' : 'var(--critical)');
+      }
+      const tdProj = document.createElement('td'); tdProj.className='num'; tdProj.dataset.label='Projetadas 2027'; tdProj.textContent = fmt(e.proj);
+      [tdName, tdInst, tdCred, tdOfer, tdOcup, tdRate, tdProj].forEach(td => tr.appendChild(td));
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('specPagerInfo').textContent =
+      `Mostrando ${fmt(startIdx+1)}–${fmt(Math.min(startIdx+SPEC_PAGE_SIZE, items.length))} de ${fmt(items.length)}`;
+    const pFirst = document.getElementById('specPFirst'), pPrev = document.getElementById('specPPrev'),
+          pNext = document.getElementById('specPNext'), pLast = document.getElementById('specPLast');
+    pFirst.disabled = pPrev.disabled = specPage <= 1;
+    pNext.disabled = pLast.disabled = specPage >= totalPages;
+    pFirst.onclick = () => { specPage = 1; renderSpecTable(computeSpecStats(getFilteredRows())); };
+    pPrev.onclick = () => { specPage = Math.max(1, specPage-1); renderSpecTable(computeSpecStats(getFilteredRows())); };
+    pNext.onclick = () => { specPage = Math.min(totalPages, specPage+1); renderSpecTable(computeSpecStats(getFilteredRows())); };
+    pLast.onclick = () => { specPage = totalPages; renderSpecTable(computeSpecStats(getFilteredRows())); };
   }
 
   function renderRankChart(containerId, items, limit){
@@ -951,7 +1107,7 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
     }));
   }
 
-  const theadRow = document.querySelector('table.data thead tr');
+  const theadRow = document.querySelector('#mainTable thead tr');
   theadRow.querySelectorAll('.th-sort').forEach(th => {
     th.addEventListener('click', () => {
       const key = th.dataset.key;
@@ -1034,8 +1190,11 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
     const rows = getFilteredRows();
     fCount.textContent = `${fmt(rows.length)} de ${fmt(DATA.rows.length)} programas`;
     renderKPIs(rows);
-    renderRankChart('rankInst', aggregateBy(rows, 0, DATA.instNames), 12);
-    renderRankChart('rankEsp', aggregateBy(rows, 1, DATA.espNames), 12);
+    renderRankChart('rankInst', aggregateBy(rows, 0, DATA.instNames, 1), 12);
+    renderRankChart('rankEsp', aggregateBy(rows, 1, DATA.espNames, 0), 12);
+    const specStats = computeSpecStats(rows);
+    renderSpecHighlights(specStats);
+    renderSpecTable(specStats);
     renderPipeline(rows);
     renderDiverging(rows);
     renderDuration(rows);
@@ -1044,6 +1203,7 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
     updateSortIndicators();
   }
 
+  updateSpecSortIndicators();
   renderPipelineLegend();
   renderAll();
 })();

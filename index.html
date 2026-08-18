@@ -233,23 +233,6 @@
     font-size:12.5px; color: var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     cursor:default;
   }
-  /* Names too long for their column auto-scroll ("marquee") instead of just clipping,
-     so the full institution/program name stays readable on narrow screens. */
-  .rank-row .rname.marquee{ text-overflow: clip; }
-  .rank-row .rname .marquee-text{ display:inline-block; white-space:nowrap; }
-  .rank-row .rname.marquee .marquee-text{
-    animation-name: marquee-scroll; animation-timing-function: ease-in-out; animation-iteration-count: infinite;
-  }
-  .rank-row .rname:hover .marquee-text, .rank-row .rname:focus-within .marquee-text{ animation-play-state: paused; }
-  @keyframes marquee-scroll{
-    0%, 8%    { transform: translateX(0); }
-    42%, 50%  { transform: translateX(calc(-1 * var(--marquee-dist, 0px))); }
-    92%, 100% { transform: translateX(0); }
-  }
-  @media (prefers-reduced-motion: reduce){
-    .rank-row .rname.marquee .marquee-text{ animation: none; }
-    .rank-row .rname.marquee{ text-overflow: ellipsis; }
-  }
   .rank-track{
     position:relative; height:20px; background: var(--surface-2); border-radius: 4px; overflow:hidden;
   }
@@ -699,24 +682,6 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
       .sort((a,b)=>b.proj-a.proj);
   }
 
-  const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // If a name is too long for its column, turn it into a slow auto-scrolling
-  // marquee instead of leaving it clipped — the full institution/program name
-  // stays reachable without hovering (important on touch devices with no hover).
-  function applyMarquee(nameEl, fullText){
-    if (prefersReducedMotion) return;
-    if (nameEl.scrollWidth <= nameEl.clientWidth + 1) return; // fits already
-    const distance = (nameEl.scrollWidth - nameEl.clientWidth) + 20;
-    nameEl.textContent = '';
-    nameEl.classList.add('marquee');
-    const span = document.createElement('span');
-    span.className = 'marquee-text';
-    span.textContent = fullText;
-    span.style.setProperty('--marquee-dist', distance + 'px');
-    span.style.animationDuration = Math.max(5, distance / 26).toFixed(1) + 's';
-    nameEl.appendChild(span);
-  }
-
   function renderRankChart(containerId, items, limit){
     const el = document.getElementById(containerId);
     el.textContent = '';
@@ -753,7 +718,6 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
 
       row.appendChild(name); row.appendChild(track); row.appendChild(val);
       el.appendChild(row);
-      applyMarquee(name, item.name);
     });
   }
 
@@ -868,7 +832,6 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
 
       row.appendChild(name); row.appendChild(track); row.appendChild(val);
       el.appendChild(row);
-      applyMarquee(name, item.name);
     });
   }
 

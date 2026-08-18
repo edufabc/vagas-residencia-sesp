@@ -561,6 +561,7 @@
               <th class="th-sort num" data-key="cred">Credenciadas <span class="arrow">↕</span></th>
               <th class="th-sort num" data-key="ofer">Ofertadas <span class="arrow">↕</span></th>
               <th class="th-sort num" data-key="ocup">Ocupadas 2026 <span class="arrow">↕</span></th>
+              <th class="th-sort num" data-key="rate">Taxa de ocupação <span class="arrow">↕</span></th>
               <th class="th-sort num" data-key="proj">Projetadas 2027 <span class="arrow">↕</span></th>
               <th class="th-sort num" data-key="delta">Variação <span class="arrow">↕</span></th>
             </tr>
@@ -1146,12 +1147,15 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
 
   // ---------------- Table ----------------
   function buildTableRows(rows){
-    return rows.map(r => ({
-      esp: DATA.espNames[r[1]], inst: DATA.instNames[r[0]], dur: r[2],
-      cred: stageTotal(r,'cred'), ofer: stageTotal(r,'ofer'),
-      ocup: stageTotal(r,'ocup'), proj: stageTotal(r,'proj'),
-      delta: stageTotal(r,'proj') - stageTotal(r,'ocup'),
-    }));
+    return rows.map(r => {
+      const ofer = stageTotal(r,'ofer'), ocup = stageTotal(r,'ocup');
+      return {
+        esp: DATA.espNames[r[1]], inst: DATA.instNames[r[0]], dur: r[2],
+        cred: stageTotal(r,'cred'), ofer, ocup, proj: stageTotal(r,'proj'),
+        rate: ofer > 0 ? ocup/ofer*100 : null,
+        delta: stageTotal(r,'proj') - ocup,
+      };
+    });
   }
 
   const theadRow = document.querySelector('#mainTable thead tr');
@@ -1185,6 +1189,9 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
     items.sort((a,b) => {
       if (key === 'esp'){ return a.esp.localeCompare(b.esp, 'pt-BR') * dir; }
       const av = a[key], bv = b[key];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;  // no ofertadas → no rate; sinks to the bottom either way
+      if (bv == null) return -1;
       return (av - bv) * dir;
     });
 
@@ -1210,13 +1217,20 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
       const tdCred = document.createElement('td'); tdCred.className='num'; tdCred.dataset.label='Credenciadas'; tdCred.textContent = fmt(it.cred);
       const tdOfer = document.createElement('td'); tdOfer.className='num'; tdOfer.dataset.label='Ofertadas'; tdOfer.textContent = fmt(it.ofer);
       const tdOcup = document.createElement('td'); tdOcup.className='num'; tdOcup.dataset.label='Ocupadas 2026'; tdOcup.textContent = fmt(it.ocup);
+      const tdRate = document.createElement('td'); tdRate.className='num'; tdRate.dataset.label='Taxa de ocupação';
+      if (it.rate == null){ tdRate.textContent = '—'; }
+      else {
+        tdRate.textContent = it.rate.toFixed(1) + '%';
+        tdRate.style.fontWeight = '600';
+        tdRate.style.color = it.rate>=95 ? 'var(--success-text)' : (it.rate>=80 ? 'var(--ink-2)' : 'var(--critical)');
+      }
       const tdProj = document.createElement('td'); tdProj.className='num'; tdProj.dataset.label='Projetadas 2027'; tdProj.textContent = fmt(it.proj);
       const tdDelta = document.createElement('td');
       tdDelta.className = 'num delta ' + (it.delta>0?'up':it.delta<0?'down':'flat');
       tdDelta.dataset.label='Variação';
       tdDelta.textContent = (it.delta>0?'▲ ':it.delta<0?'▼ ':'– ') + fmtSigned(it.delta);
 
-      [tdName, tdDur, tdCred, tdOfer, tdOcup, tdProj, tdDelta].forEach(td => tr.appendChild(td));
+      [tdName, tdDur, tdCred, tdOfer, tdOcup, tdRate, tdProj, tdDelta].forEach(td => tr.appendChild(td));
       tbody.appendChild(tr);
     });
 

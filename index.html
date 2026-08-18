@@ -227,9 +227,18 @@
   .grid-2{ display:grid; grid-template-columns: 1fr; gap: 16px; }
 
   /* legend */
-  .legend{ display:flex; flex-wrap:wrap; gap:14px; font-size:12.5px; color:var(--ink-2); margin-bottom:10px; }
-  .legend .li{ display:flex; align-items:center; gap:6px; }
+  .legend{ display:flex; flex-wrap:wrap; gap:6px; font-size:12.5px; color:var(--ink-2); margin-bottom:10px; }
+  .legend .li{
+    display:flex; align-items:center; gap:6px; font: inherit; color: inherit;
+    background: none; border: 1px solid transparent; border-radius: 20px; padding: 3px 10px 3px 8px;
+    cursor: pointer; transition: opacity .12s ease, background .12s ease;
+  }
+  .legend .li:hover{ background: var(--surface-2); }
+  .legend .li:focus-visible{ outline: 2px solid var(--s1-blue); outline-offset: 1px; }
+  .legend .li.off{ opacity: .45; }
+  .legend .li.off .sw{ background: var(--ink-muted) !important; }
   .legend .sw{ width:11px; height:11px; border-radius:3px; flex:none; }
+  .legend-hint{ font-size:11.5px; color:var(--ink-muted); margin:-4px 0 10px; }
 
   /* ---------- Ranking bars ---------- */
   .rank-list{ display:flex; flex-direction:column; gap:9px; }
@@ -495,6 +504,7 @@
     </div>
     <div class="card">
       <div class="legend" id="pipelineLegend"></div>
+      <p class="legend-hint">Toque numa etapa pra escondê-la e reescalar o gráfico — útil pra comparar ofertadas/ocupadas/projetadas sem a barra bem maior de credenciadas dominando a escala.</p>
       <div class="pipeline-wrap">
         <div class="pipeline-axis" id="pipelineAxis"></div>
         <div class="pipeline-plot">
@@ -897,18 +907,40 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
     {key:'ocup', label:'Ocupadas 2026', color:'var(--s3-aqua)'},
     {key:'proj', label:'Projetadas 2027', color:'var(--s4-yellow)'},
   ];
+  // Every stage starts visible; clicking a legend item hides it and the axis
+  // rescales to whatever's left — otherwise credenciadas (much larger than the
+  // other three) flattens ofertadas/ocupadas/projetadas into near-invisible bars.
+  const pipelineVisible = new Set(STAGES.map(s => s.key));
+  let lastPipelineRows = [];
+
   function renderPipelineLegend(){
     const el = document.getElementById('pipelineLegend');
     el.textContent = '';
     STAGES.forEach(s => {
-      const li = document.createElement('span'); li.className='li';
+      const on = pipelineVisible.has(s.key);
+      const li = document.createElement('button');
+      li.type = 'button';
+      li.className = 'li' + (on ? '' : ' off');
+      li.setAttribute('aria-pressed', on ? 'true' : 'false');
       const sw = document.createElement('span'); sw.className='sw'; sw.style.background = s.color;
       const tx = document.createElement('span'); tx.textContent = s.label;
       li.appendChild(sw); li.appendChild(tx);
+      li.addEventListener('click', () => {
+        if (pipelineVisible.has(s.key)){
+          if (pipelineVisible.size === 1) return; // always keep at least one stage on screen
+          pipelineVisible.delete(s.key);
+        } else {
+          pipelineVisible.add(s.key);
+        }
+        renderPipelineLegend();
+        renderPipeline(lastPipelineRows);
+      });
       el.appendChild(li);
     });
   }
   function renderPipeline(rows){
+    lastPipelineRows = rows;
+    const activeStages = STAGES.filter(s => pipelineVisible.has(s.key));
     const rYears = ['R1','R2','R3','R4','R5'];
     const agg = rYears.map((_,i) => ({R:i, cred:0, ofer:0, ocup:0, proj:0}));
     rows.forEach(r => {
@@ -919,7 +951,7 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
         agg[i].proj += r[OFF.proj+i];
       }
     });
-    const max = Math.max(1, ...agg.flatMap(a => STAGES.map(s=>a[s.key])));
+    const max = Math.max(1, ...agg.flatMap(a => activeStages.map(s=>a[s.key])));
     // nice rounded axis max
     const niceMax = (() => {
       const magnitude = Math.pow(10, Math.floor(Math.log10(max||1)));
@@ -945,14 +977,14 @@ const DATA = {"instNames":["ASSOCIAÇÃO BENEFICENTE NOSSA SENHORA DO PARI","Ass
     barsEl.textContent = '';
     agg.forEach((a, i) => {
       const group = document.createElement('div'); group.className='pgroup';
-      STAGES.forEach(s => {
+      activeStages.forEach(s => {
         const col = document.createElement('div'); col.className='pcol';
         col.style.background = s.color;
         col.style.height = Math.max((a[s.key]/niceMax*100), a[s.key]>0?0.6:0) + '%';
         col.tabIndex = 0;
         col.setAttribute('role','img');
         col.setAttribute('aria-label', `${rYears[i]} · ${s.label}: ${fmt(a[s.key])}`);
-        const mv = (evt) => showTooltip(evt, rYears[i], STAGES.map(st => ({label:st.label, value:fmt(a[st.key]), color:st.color})));
+        const mv = (evt) => showTooltip(evt, rYears[i], activeStages.map(st => ({label:st.label, value:fmt(a[st.key]), color:st.color})));
         col.addEventListener('pointermove', mv);
         col.addEventListener('pointerenter', mv);
         col.addEventListener('focus', mv);

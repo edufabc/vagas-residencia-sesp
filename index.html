@@ -294,12 +294,11 @@
     font-size:12.5px; color:var(--ink); font-weight:600;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
-  .finpair-delta{ font-size:11.5px; font-weight:700; font-family:"IBM Plex Mono",monospace; white-space:nowrap; flex:none; }
+  .finpair-delta{ font-size:12px; font-weight:700; font-family:"IBM Plex Mono",monospace; white-space:nowrap; flex:none; }
   .finpair-delta.up{ color: var(--success-text); }
   .finpair-delta.down{ color: var(--critical); }
   .finpair-delta.flat{ color: var(--ink-muted); }
-  .finpair-delta .pct{ color:var(--ink-muted); font-weight:600; }
-  .finpair-line{ display:grid; grid-template-columns: 38px 1fr 84px 78px; align-items:center; gap:8px; }
+  .finpair-line{ display:grid; grid-template-columns: 38px 1fr 84px; align-items:center; gap:8px; }
   .finpair-line + .finpair-line{ margin-top:4px; }
   .finpair-tag{ font-size:10px; font-weight:700; color:var(--ink-muted); text-align:right; font-family:"IBM Plex Mono",monospace; }
   .finpair-track{ position:relative; height:14px; background:var(--surface-2); border-radius:4px; overflow:hidden; }
@@ -309,10 +308,8 @@
   .finpair-fill.y2027{ background: var(--fin-salmon); }
   .finpair-track:hover .finpair-fill{ filter:brightness(1.08); }
   .finpair-val{ font-family:"IBM Plex Mono",monospace; font-size:11.5px; text-align:right; color:var(--ink); font-variant-numeric:tabular-nums; white-space:nowrap; }
-  .finpair-vagas{ font-family:"IBM Plex Mono",monospace; font-size:11px; text-align:right; color:var(--ink-muted); white-space:nowrap; }
   @media (max-width: 560px){
     .finpair-line{ grid-template-columns: 32px 1fr 70px; }
-    .finpair-vagas{ display:none; }
   }
 
   /* ---------- Pipeline (grouped columns) chart ---------- */
@@ -1605,6 +1602,10 @@ const FIN_DATA = {"rows":[{"inst":"FACULDADE DE MEDICINA DA USP - FMUSP","coef":
     // lengths stay comparable as you page through — not rescaled page to page.
     const max = Math.max(...items.flatMap(r=>[r.ano, r.ano27]), 1);
 
+    // Vagas and the exact R$ delta already live in the table right below this
+    // chart — repeating them here just to fill space was the complaint. Each
+    // bar keeps one value (R$, so it can be read without hovering); vagas and
+    // the full R$-vs-2026 breakdown move to the tooltip, reachable on demand.
     function bar(r, year, ano, vagas, colorClass, colorVar){
       const line = document.createElement('div'); line.className='finpair-line';
       const tag = document.createElement('div'); tag.className='finpair-tag'; tag.textContent = year;
@@ -1615,7 +1616,6 @@ const FIN_DATA = {"rows":[{"inst":"FACULDADE DE MEDICINA DA USP - FMUSP","coef":
       fill.style.width = Math.max(ano/max*100, 1.5) + '%';
       track.appendChild(fill);
       const val = document.createElement('div'); val.className='finpair-val'; val.textContent = fmtBRLCompact(ano);
-      const vagasEl = document.createElement('div'); vagasEl.className='finpair-vagas'; vagasEl.textContent = `${fmt(vagas)} vagas`;
 
       const mv = (evt) => showTooltip(evt, `${r.inst} — ${year}`, [
         {label:'Vagas', value: fmt(vagas)},
@@ -1628,7 +1628,7 @@ const FIN_DATA = {"rows":[{"inst":"FACULDADE DE MEDICINA DA USP - FMUSP","coef":
       track.addEventListener('pointerleave', hideTooltip);
       track.addEventListener('blur', hideTooltip);
 
-      line.appendChild(tag); line.appendChild(track); line.appendChild(val); line.appendChild(vagasEl);
+      line.appendChild(tag); line.appendChild(track); line.appendChild(val);
       return line;
     }
 
@@ -1640,10 +1640,10 @@ const FIN_DATA = {"rows":[{"inst":"FACULDADE DE MEDICINA DA USP - FMUSP","coef":
       const pct = r.ano > 0 ? (r.anoDelta/r.ano*100) : null;
       const delta = document.createElement('div');
       delta.className = 'finpair-delta ' + (r.anoDelta>0?'up':r.anoDelta<0?'down':'flat');
-      delta.textContent = (r.anoDelta>0?'▲ ':r.anoDelta<0?'▼ ':'= ') + (r.anoDelta>=0?'+':'') + fmtBRLCompact(r.anoDelta);
+      delta.textContent = r.anoDelta>0?'▲':r.anoDelta<0?'▼':'=';
       if (pct !== null){
         const pctSpan = document.createElement('span'); pctSpan.className='pct';
-        pctSpan.textContent = ` (${pct>=0?'+':''}${pct.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%)`;
+        pctSpan.textContent = ` ${pct>=0?'+':''}${pct.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%`;
         delta.appendChild(pctSpan);
       }
       head.appendChild(name); head.appendChild(delta);

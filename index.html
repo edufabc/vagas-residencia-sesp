@@ -499,8 +499,6 @@
     <button class="tab-btn" id="tabBtnFinanceiro" role="tab" aria-selected="false" aria-controls="tabFinanceiro">Dados Financeiros</button>
   </div>
 
-  <div id="tabVagas" class="tabpanel" role="tabpanel" aria-labelledby="tabBtnVagas">
-
   <div class="filterbar">
     <span class="flabel">Filtrar</span>
     <div class="search-wrap">
@@ -520,6 +518,9 @@
     <button class="btn-clear" id="fClear">Limpar filtros</button>
     <span class="filter-count" id="fCount"></span>
   </div>
+  <p class="legend-hint">Estes filtros valem para as duas abas — a aba Financeira recalcula os valores pagos cruzando as vagas filtradas com a tarifa de cada instituição.</p>
+
+  <div id="tabVagas" class="tabpanel" role="tabpanel" aria-labelledby="tabBtnVagas">
 
   <div class="kpi-row" id="kpiRow"></div>
 
@@ -670,17 +671,8 @@
 
   <div id="tabFinanceiro" class="tabpanel" role="tabpanel" aria-labelledby="tabBtnFinanceiro" style="display:none;">
 
-    <p class="sub" style="margin:0 0 20px;">Valor pago em bolsas de residência por instituição — vagas ocupadas em 2026, valor unitário mensal por bolsa e o total mensal/anual pago pela SES/SP.</p>
-
-    <div class="filterbar">
-      <span class="flabel">Filtrar</span>
-      <div class="search-wrap">
-        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6.5" fill="none" stroke="currentColor" stroke-width="1.6"/><line x1="13.6" y1="13.6" x2="18" y2="18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        <input type="search" id="finSearch" placeholder="Buscar instituição…" aria-label="Buscar instituição">
-      </div>
-      <button class="btn-clear" id="finClear">Limpar filtro</button>
-      <span class="filter-count" id="finCount"></span>
-    </div>
+    <p class="sub" style="margin:0 0 8px;" id="finSub">Valor pago em bolsas de residência por instituição — vagas ocupadas em 2026, valor unitário mensal por bolsa e o total mensal/anual pago pela SES/SP.</p>
+    <p class="legend-hint" id="finExcludedNote" style="display:none;"></p>
 
     <div class="kpi-row" id="finKpiRow"></div>
 
@@ -822,14 +814,20 @@ const FIN_DATA = {"rows":[{"inst":"FACULDADE DE MEDICINA DA USP - FMUSP","coef":
   document.getElementById('metaLine').textContent =
     `${DATA.instNames.length} instituições · ${DATA.espNames.length} especialidades · ${DATA.rows.length} programas de residência cadastrados`;
 
-  fSearch.addEventListener('input', () => { state.q = fSearch.value.trim().toLowerCase(); state.page = 1; specPage = 1; renderAll(); });
-  fInst.addEventListener('change', () => { state.inst = fInst.value; state.page = 1; specPage = 1; renderAll(); });
-  fEsp.addEventListener('change', () => { state.esp = fEsp.value; state.page = 1; specPage = 1; renderAll(); });
-  fDur.addEventListener('change', () => { state.dur = fDur.value; state.page = 1; specPage = 1; renderAll(); });
+  // Filters are global (shared header, above the tabs) — every change re-renders
+  // whichever tab is visible and the one that isn't, so switching tabs never
+  // shows stale data.
+  function resetPagers(){ state.page = 1; specPage = 1; finState.page = 1; finEvoPage = 1; }
+  function renderBothTabs(){ renderAll(); renderFinancialAll(); }
+  fSearch.addEventListener('input', () => { state.q = fSearch.value.trim().toLowerCase(); resetPagers(); renderBothTabs(); });
+  fInst.addEventListener('change', () => { state.inst = fInst.value; resetPagers(); renderBothTabs(); });
+  fEsp.addEventListener('change', () => { state.esp = fEsp.value; resetPagers(); renderBothTabs(); });
+  fDur.addEventListener('change', () => { state.dur = fDur.value; resetPagers(); renderBothTabs(); });
   fClear.addEventListener('click', () => {
-    state.q=''; state.inst=''; state.esp=''; state.dur=''; state.page=1; specPage = 1;
+    state.q=''; state.inst=''; state.esp=''; state.dur='';
+    resetPagers();
     fSearch.value=''; fInst.value=''; fEsp.value=''; fDur.value='';
-    renderAll();
+    renderBothTabs();
   });
 
   function getFilteredRows(){
@@ -1501,12 +1499,54 @@ const FIN_DATA = {"rows":[{"inst":"FACULDADE DE MEDICINA DA USP - FMUSP","coef":
     if (abs >= 1e3) return `${sign}R$ ${(abs/1e3).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})} mil`;
     return fmtBRL(n);
   }
-  const finState = { q:'', sortKey:'ano', sortDir:'desc', page:1, pageSize:25 };
+  const finState = { sortKey:'ano', sortDir:'desc', page:1, pageSize:25 };
+
+  // Institution name (uppercase) → its funding rate, from the financial sheet.
+  const FIN_BY_INST = new Map(FIN_DATA.rows.map(r => [r.inst.toUpperCase(), r]));
+
+  // The Financial tab has no specialty/duration column of its own — it's a
+  // per-institution sheet. To let it respect the same especialidade/duração/
+  // instituição filters as the Vagas tab, every filtered vagas row is joined
+  // to its institution's funding rate and re-aggregated here. Unfiltered, this
+  // reduces back to (approximately) the source spreadsheet's own totals.
+  function computeFinJoined(vagasRows){
+    const byInst = new Map();
+    vagasRows.forEach(r => {
+      const instIdx = r[0];
+      const rate = FIN_BY_INST.get(DATA.instNames[instIdx].toUpperCase());
+      if (!rate) return; // no funding-rate on file for this institution
+      let a = byInst.get(instIdx);
+      if (!a){ a = { instIdx, inst: DATA.instNames[instIdx], coef: rate.coef, unit: rate.unit, ocup:0, proj:0 }; byInst.set(instIdx, a); }
+      a.ocup += stageTotal(r,'ocup');
+      a.proj += stageTotal(r,'proj');
+    });
+    return [...byInst.values()].map(a => {
+      const mes = a.ocup * a.unit, ano = mes * 12;
+      const mes27 = a.proj * a.unit, ano27 = mes27 * 12;
+      const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100 || 0; // also folds -0 to 0
+      return {
+        inst: a.inst, coef: a.coef, unit: a.unit,
+        v2026: a.ocup, v2027: a.proj, diff: a.proj - a.ocup,
+        mes: round2(mes), ano: round2(ano), mes27: round2(mes27), ano27: round2(ano27),
+        anoDelta: round2(ano27 - ano),
+      };
+    });
+  }
+
+  // Institutions present in the filtered vagas rows but absent from the
+  // funding-rate sheet — excluded from every financial total, so callers can
+  // surface how many were left out rather than silently under-counting.
+  function countFinExcluded(vagasRows){
+    const all = new Set(), matched = new Set();
+    vagasRows.forEach(r => {
+      all.add(r[0]);
+      if (FIN_BY_INST.has(DATA.instNames[r[0]].toUpperCase())) matched.add(r[0]);
+    });
+    return all.size - matched.size;
+  }
 
   function getFinRows(){
-    const q = finState.q;
-    if (!q) return FIN_DATA.rows;
-    return FIN_DATA.rows.filter(r => r.inst.toLowerCase().includes(q));
+    return computeFinJoined(getFilteredRows());
   }
 
   function renderFinKPIs(rows){
@@ -1783,20 +1823,40 @@ const FIN_DATA = {"rows":[{"inst":"FACULDADE DE MEDICINA DA USP - FMUSP","coef":
     renderFinSignedList('finLosersList', losers, 'var(--div-neg)');
   }
 
+  function describeActiveFilters(){
+    const bits = [];
+    if (state.inst !== '') bits.push(`instituição: ${DATA.instNames[Number(state.inst)]}`);
+    if (state.esp !== '') bits.push(`especialidade: ${DATA.espNames[Number(state.esp)]}`);
+    if (state.dur !== '') bits.push(`duração: ${state.dur}${state.dur==='1'?' ano':' anos'}`);
+    if (state.q) bits.push(`busca: "${state.q}"`);
+    return bits;
+  }
+
   function renderFinancialAll(){
-    const rows = getFinRows();
-    document.getElementById('finCount').textContent = `${fmt(rows.length)} de ${fmt(FIN_DATA.rows.length)} instituições`;
+    const vagasRows = getFilteredRows();
+    const rows = computeFinJoined(vagasRows);
+    const excluded = countFinExcluded(vagasRows);
+
+    const filters = describeActiveFilters();
+    const finSubBase = 'Valor pago em bolsas de residência por instituição — vagas ocupadas em 2026, valor unitário mensal por bolsa e o total mensal/anual pago pela SES/SP.';
+    document.getElementById('finSub').textContent = filters.length
+      ? `${finSubBase} Filtrado por ${filters.join(', ')}.`
+      : finSubBase;
+
+    const excludedNote = document.getElementById('finExcludedNote');
+    if (excluded > 0){
+      excludedNote.style.display = '';
+      excludedNote.textContent = `${fmt(excluded)} instituiç${excluded===1?'ão':'ões'} sem tarifa cadastrada na planilha financeira — não ${excluded===1?'entra':'entram'} nos totais abaixo.`;
+    } else {
+      excludedNote.style.display = 'none';
+    }
+
     renderFinKPIs(rows);
     renderFinRank(rows);
     renderFinEvolution(rows);
     renderFinVariacoes(rows);
     renderFinTable(rows);
   }
-
-  const finSearch = document.getElementById('finSearch');
-  const finClear = document.getElementById('finClear');
-  finSearch.addEventListener('input', () => { finState.q = finSearch.value.trim().toLowerCase(); finState.page = 1; finEvoPage = 1; renderFinancialAll(); });
-  finClear.addEventListener('click', () => { finState.q=''; finSearch.value=''; finState.page=1; finEvoPage = 1; renderFinancialAll(); });
 
   updateFinSortIndicators();
   renderFinancialAll();
